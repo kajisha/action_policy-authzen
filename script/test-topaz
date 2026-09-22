@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT}"
+TOPAZ_VERSION="${TOPAZ_VERSION:-v0.33.20}"
+TOPAZ_URL="${TOPAZ_URL:-http://127.0.0.1:18383}"
+TOPAZ_GRPC="${TOPAZ_GRPC:-127.0.0.1:19292}"
+WORKDIR="${TOPAZ_WORKDIR:-/tmp/action-policy-authzen-topaz}"
+BIN_DIR="${WORKDIR}/bin"
+ZIP_PATH="${WORKDIR}/topaz_linux_amd64.zip"
+DOWNLOAD_URL="https://github.com/aserto-dev/topaz/releases/download/${TOPAZ_VERSION}/topaz_linux_amd64.zip"
+
+mkdir -p "${BIN_DIR}" "${WORKDIR}/xdg-config" "${WORKDIR}/xdg-data/db" "${WORKDIR}/xdg-data/decisions"
+
+if [[ ! -x "${BIN_DIR}/topaz" || ! -x "${BIN_DIR}/topazd" ]]; then
+  curl -fsSL -o "${ZIP_PATH}" "${DOWNLOAD_URL}"
+  unzip -o "${ZIP_PATH}" -d "${BIN_DIR}" >/dev/null
+fi
+
+export XDG_CONFIG_HOME="${WORKDIR}/xdg-config"
+export XDG_DATA_HOME="${WORKDIR}/xdg-data"
+export TOPAZ_DB_DIR="${WORKDIR}/xdg-data/db"
+export TOPAZ_DECISIONS_DIR="${WORKDIR}/xdg-data/decisions"
+export TOPAZ_DIRECTORY_GRPC_LISTEN="${TOPAZ_GRPC}"
+export TOPAZ_AUTHORIZER_HTTP_LISTEN="${TOPAZ_URL#http://}"
+export TOPAZ_AUTHORIZER_PUBLIC_URL="${TOPAZ_URL}"
+export TOPAZ_POLICY_RESOURCE="${TOPAZ_POLICY_RESOURCE:-ghcr.io/aserto-policies/policy-todo:3.0.0}"
+export TOPAZ_POLICY_NAME="${TOPAZ_POLICY_NAME:-todo}"
+export TOPAZ_NO_CHECK=true
+export TOPAZ_NO_COLOR=true
+
+"${BIN_DIR}/topazd" run -c "${ROOT}/test/fixtures/topaz/config/config.yaml" &
+TOPAZD_PID=$!
+trap 'kill "${TOPAZD_PID}" >/dev/null 2>&1 || true' EXIT
+
+for _ in {1..60}; do
+  if "${BIN_DIR}/topaz" directory stats --host "${TOPAZ_GRPC}" --plaintext >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+"${BIN_DIR}/topaz" directory set manifest --host "${TOPAZ_GRPC}" --plaintext "${ROOT}/test/fixtures/topaz/todo/manifest.yaml"
+"${BIN_DIR}/topaz" directory data import --host "${TOPAZ_GRPC}" --plaintext --directory "${ROOT}/test/fixtures/topaz/citadel"
+"${BIN_DIR}/topaz" directory data import --host "${TOPAZ_GRPC}" --plaintext --directory "${ROOT}/test/fixtures/topaz/todo"
+
+TOPAZ_URL="${TOPAZ_URL}" \
+bundle exec ruby -Itest test/integration/topaz_test.rb

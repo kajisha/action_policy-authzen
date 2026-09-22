@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+SCENARIO="${1:-interop}"
+case "$SCENARIO" in
+  interop) FIXTURE=opa; TEST_FILE=opa_test.rb ;;
+  official) FIXTURE=official_scenario; TEST_FILE=official_scenario_test.rb ;;
+  *) echo 'Usage: bash script/test-opa [interop|official]'; exit 1 ;;
+esac
+WORKDIR="$(mktemp -d /tmp/action-policy-authzen-opa.XXXXXX)"
+OPA_URL="http://127.0.0.1:${OPA_PORT:-18181}"
+SERVER_PID=""
+trap 'if [[ -n "$SERVER_PID" ]]; then kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi' EXIT
+[[ "$(uname -s)-$(uname -m)" == Linux-x86_64 ]] || { echo 'This runner requires Linux x86_64'; exit 1; }
+curl -fsSL --retry 3 https://github.com/kanywst/opa-authzen-plugin/releases/download/v0.8.0/opa_authzen_linux_amd64 -o "$WORKDIR/opa"
+echo "b607ec43c95f23273012bd439cdc28075105f56cbeccda341a1221d1e7380b50  $WORKDIR/opa" | sha256sum -c -
+chmod +x "$WORKDIR/opa"
+"$WORKDIR/opa" run --server --addr "${OPA_URL#http://}" --config-file "test/fixtures/$FIXTURE/config.yaml" "test/fixtures/$FIXTURE/policy.rego" >"$WORKDIR/server.log" 2>&1 &
+SERVER_PID=$!
+READY=false
+for attempt in {1..60}; do
+  kill -0 "$SERVER_PID" 2>/dev/null || { cat "$WORKDIR/server.log"; exit 1; }
+  if curl -fsS "$OPA_URL/health" >/dev/null 2>&1; then READY=true; break; fi
+  sleep 1
+done
+[[ "$READY" == true ]] || { cat "$WORKDIR/server.log"; exit 1; }
+OPA_URL="$OPA_URL" OFFICIAL_PDP_URL="$OPA_URL" bundle exec ruby -Itest "test/integration/$TEST_FILE"

@@ -1,0 +1,362 @@
+{
+  "source": {
+    "scenario": "authorization-api-1_0-scenario",
+    "pinned_upstream": "6ed00bad5daa8f6eef6f2aef1f124442beeb8382"
+  },
+  "unsupported": [
+    {
+      "id": "c-2-2-9",
+      "reason": "Not applicable to the typed ActionPolicy::AuthZEN::Client: it has no raw request API for PDP-only unknown top-level request fields; entity properties are covered by c-2-2-8."
+    }
+  ],
+  "adaptations": [
+    {
+      "id": "c-4-5-2",
+      "reason": "The official illustrative token request omits page.limit, but this client preserves unchanged query options during pagination; the integration follow-up sends both page.limit and page.token."
+    }
+  ],
+  "evaluation": [
+    {
+      "id": "c-2-2-1",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "decision": true
+    },
+    {
+      "id": "c-2-2-2",
+      "request": {
+        "subject": {"type": "user", "id": "bob"},
+        "action": {"name": "write"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "decision": false
+    },
+    {
+      "id": "c-2-2-3",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"},
+        "context": {"time": "2025-06-27T18:03-07:00", "ip": "192.168.1.1"}
+      },
+      "decision": true
+    },
+    {
+      "id": "c-2-2-4",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "write"},
+        "resource": {"type": "record", "id": "record-2", "properties": {"status": "archived"}}
+      },
+      "decision": false
+    },
+    {
+      "id": "c-2-2-5",
+      "request": {
+        "subject": {"type": "user", "id": "bob", "properties": {"role": "admin"}},
+        "action": {"name": "write"},
+        "resource": {"type": "record", "id": "record-2", "properties": {"status": "archived"}}
+      },
+      "decision": true
+    },
+    {
+      "id": "c-2-2-6",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "delete", "properties": {"soft": true}},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "decision": true
+    },
+    {
+      "id": "c-2-2-7",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "delete", "properties": {"soft": false}},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "decision": false
+    },
+    {
+      "id": "c-2-2-8",
+      "request": {
+        "subject": {"type": "user", "id": "alice", "properties": {"department": "Sales", "role": "manager"}},
+        "action": {"name": "read", "properties": {"method": "GET"}},
+        "resource": {"type": "record", "id": "record-1", "properties": {"status": "active", "owner": "bob"}}
+      },
+      "decision": true
+    }
+  ],
+  "repeat": {
+    "id": "c-2-6",
+    "count": 3,
+    "request": {
+      "subject": {"type": "user", "id": "alice"},
+      "action": {"name": "read"},
+      "resource": {"type": "record", "id": "record-1"}
+    },
+    "decision": true
+  },
+  "batch": [
+    {
+      "id": "c-3-2-1",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "evaluations": [
+          {"resource": {"type": "record", "id": "record-1"}},
+          {"resource": {"type": "record", "id": "record-2"}}
+        ]
+      },
+      "count": 2
+    },
+    {
+      "id": "c-3-2-2",
+      "request": {
+        "subject": {"type": "user", "id": "bob"},
+        "resource": {"type": "record", "id": "record-1"},
+        "evaluations": [
+          {"action": {"name": "read"}},
+          {"action": {"name": "write"}}
+        ]
+      },
+      "decisions": [true, false]
+    },
+    {
+      "id": "c-3-2-3",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "write"},
+        "evaluations": [
+          {"resource": {"type": "record", "id": "record-1", "properties": {"status": "active"}}},
+          {"resource": {"type": "record", "id": "record-2", "properties": {"status": "archived"}}}
+        ]
+      },
+      "decisions": [true, false]
+    },
+    {
+      "id": "c-3-2-4",
+      "request": {
+        "action": {"name": "write"},
+        "resource": {"type": "record", "id": "record-2", "properties": {"status": "archived"}},
+        "evaluations": [
+          {"subject": {"type": "user", "id": "alice"}},
+          {"subject": {"type": "user", "id": "bob", "properties": {"role": "admin"}}}
+        ]
+      },
+      "decisions": [false, true]
+    },
+    {
+      "id": "c-3-2-5",
+      "request": {
+        "evaluations": [
+          {
+            "subject": {"type": "user", "id": "alice"},
+            "action": {"name": "read"},
+            "resource": {"type": "record", "id": "record-1"}
+          },
+          {
+            "subject": {"type": "user", "id": "bob"},
+            "action": {"name": "write"},
+            "resource": {"type": "record", "id": "record-1"}
+          }
+        ]
+      },
+      "decisions": [true, false]
+    },
+    {
+      "id": "c-3-2-6",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "context": {"time": "2025-06-27T18:03-07:00"},
+        "evaluations": [
+          {"resource": {"type": "record", "id": "record-1"}},
+          {"resource": {"type": "record", "id": "record-2"}, "context": {"time": "2025-06-27T19:00-07:00", "source": "batch-override"}}
+        ]
+      },
+      "count": 2
+    },
+    {
+      "id": "c-3-2-7",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "write"},
+        "resource": {"type": "record", "id": "record-1", "properties": {"status": "active"}},
+        "evaluations": [
+          {},
+          {"resource": {"type": "record", "id": "record-2", "properties": {"status": "archived"}}}
+        ]
+      },
+      "decisions": [true, false]
+    },
+    {
+      "id": "c-3-4-2",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "decision": true
+    },
+    {
+      "id": "c-3-4-3",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"},
+        "evaluations": []
+      },
+      "decision": true
+    }
+  ],
+  "search": [
+    {
+      "id": "c-4-2-1",
+      "method": "search_subjects",
+      "request": {
+        "subject": {"type": "user"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "ids": ["alice", "bob"]
+    },
+    {
+      "id": "c-4-2-2",
+      "method": "search_subjects",
+      "same_as": "c-4-2-1",
+      "request": {
+        "subject": {"type": "user"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"},
+        "context": {"time": "2025-06-27T18:03-07:00", "ip": "192.168.1.1"}
+      },
+      "ids": ["alice", "bob"]
+    },
+    {
+      "id": "c-4-2-3",
+      "method": "search_subjects",
+      "same_as": "c-4-2-1",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "ids": ["alice", "bob"]
+    },
+    {
+      "id": "c-4-2-4",
+      "method": "search_subjects",
+      "request": {
+        "subject": {"type": "user"},
+        "action": {"name": "write"},
+        "resource": {"type": "record", "id": "record-2", "properties": {"status": "archived"}}
+      },
+      "ids": ["bob"]
+    },
+    {
+      "id": "c-4-3-1",
+      "method": "search_resources",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record"}
+      },
+      "ids": ["record-1"]
+    },
+    {
+      "id": "c-4-3-2",
+      "method": "search_resources",
+      "same_as": "c-4-3-1",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record"},
+        "context": {"time": "2025-06-27T18:03-07:00", "ip": "192.168.1.1"}
+      },
+      "ids": ["record-1"]
+    },
+    {
+      "id": "c-4-3-3",
+      "method": "search_resources",
+      "same_as": "c-4-3-1",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "ids": ["record-1"]
+    },
+    {
+      "id": "c-4-3-4",
+      "method": "search_resources",
+      "request": {
+        "subject": {"type": "user", "id": "bob", "properties": {"role": "admin"}},
+        "action": {"name": "write"},
+        "resource": {"type": "record"}
+      },
+      "ids": ["record-2"]
+    },
+    {
+      "id": "c-4-4-1",
+      "method": "search_actions",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "names": ["read", "write"]
+    },
+    {
+      "id": "c-4-4-2",
+      "method": "search_actions",
+      "same_as": "c-4-4-1",
+      "request": {
+        "subject": {"type": "user", "id": "alice"},
+        "resource": {"type": "record", "id": "record-1"},
+        "context": {"time": "2025-06-27T18:03-07:00", "ip": "192.168.1.1"}
+      },
+      "names": ["read", "write"]
+    },
+    {
+      "id": "c-4-4-3",
+      "method": "search_actions",
+      "request": {
+        "subject": {"type": "user", "id": "bob", "properties": {"role": "admin"}},
+        "resource": {"type": "record", "id": "record-2", "properties": {"status": "archived"}}
+      },
+      "names": ["write"]
+    },
+    {
+      "id": "c-4-5-1",
+      "method": "search_subjects",
+      "request": {
+        "subject": {"type": "user"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"},
+        "page": {"limit": 1}
+      }
+    },
+    {
+      "id": "c-4-6-1",
+      "method": "search_actions",
+      "request": {
+        "subject": {"type": "user", "id": "nonexistent-user"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "empty": true
+    },
+    {
+      "id": "c-4-6-2",
+      "method": "search_subjects",
+      "request": {
+        "subject": {"type": "spaceship"},
+        "action": {"name": "read"},
+        "resource": {"type": "record", "id": "record-1"}
+      },
+      "empty": true
+    }
+  ]
+}

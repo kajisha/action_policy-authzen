@@ -1,0 +1,9 @@
+plugins:
+  authzen:
+    path: authzen
+    decision: allow
+    search:
+      subject: subjects
+      resource: resources
+      action: actions
+      max_limit: 100

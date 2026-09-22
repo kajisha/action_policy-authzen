@@ -1,0 +1,178 @@
+# yaml-language-server: $schema=https://topaz.sh/schema/config.json
+---
+version: 2
+
+logging:
+  prod: true
+  log_level: info
+  grpc_log_level: info
+
+directory:
+  db_path: '${TOPAZ_DB_DIR}/action-policy-authzen-topaz.db'
+  request_timeout: 5s
+
+remote_directory:
+  address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+  insecure: false
+  no_tls: true
+  no_proxy: false
+  api_key: ""
+  token: ""
+  client_cert_path: ""
+  client_key_path: ""
+  ca_cert_path: ""
+  headers:
+
+jwt:
+  acceptable_time_skew_seconds: 5
+  allowed_issuers:
+  cache_refresh_min_interval: 5m
+  cache_refresh_max_interval: 15m
+  expected_audience: ""
+
+auth:
+  keys:
+  options:
+    default:
+      enable_api_key: false
+      enable_anonymous: true
+    overrides:
+      paths:
+        - /aserto.authorizer.v2.Authorizer/Info
+        - /grpc.reflection.v1.ServerReflection/ServerReflectionInfo
+        - /grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo
+      override:
+        enable_api_key: false
+        enable_anonymous: true
+
+api:
+  health:
+    listen_address: "127.0.0.1:0"
+  metrics:
+    listen_address: "127.0.0.1:0"
+    zpages: false
+  services:
+    console:
+      grpc:
+        listen_address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+        fqdn: ""
+      gateway:
+        listen_address: '${TOPAZ_AUTHORIZER_HTTP_LISTEN}'
+        fqdn: ""
+        http: true
+    model:
+      grpc:
+        listen_address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+        fqdn: ""
+      gateway:
+        listen_address: '${TOPAZ_AUTHORIZER_HTTP_LISTEN}'
+        fqdn: ""
+        http: true
+    reader:
+      needs:
+        - model
+      grpc:
+        listen_address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+        fqdn: ""
+      gateway:
+        listen_address: '${TOPAZ_AUTHORIZER_HTTP_LISTEN}'
+        fqdn: ""
+        http: true
+    writer:
+      needs:
+        - model
+      grpc:
+        listen_address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+        fqdn: ""
+      gateway:
+        listen_address: '${TOPAZ_AUTHORIZER_HTTP_LISTEN}'
+        fqdn: ""
+        http: true
+    exporter:
+      grpc:
+        listen_address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+        fqdn: ""
+    importer:
+      needs:
+        - model
+      grpc:
+        listen_address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+        fqdn: ""
+    authorizer:
+      needs:
+        - reader
+      grpc:
+        connection_timeout_seconds: 2
+        listen_address: '${TOPAZ_DIRECTORY_GRPC_LISTEN}'
+        fqdn: ""
+      gateway:
+        listen_address: '${TOPAZ_AUTHORIZER_HTTP_LISTEN}'
+        fqdn: '${TOPAZ_AUTHORIZER_PUBLIC_URL}'
+        allowed_headers:
+          - "Authorization"
+          - "Content-Type"
+        allowed_methods:
+          - "GET"
+          - "POST"
+          - "HEAD"
+        allowed_origins:
+          - http://localhost
+          - http://localhost:*
+          - http://127.0.0.1
+          - http://127.0.0.1:*
+        http: true
+        read_timeout: 2s
+        read_header_timeout: 2s
+        write_timeout: 2s
+        idle_timeout: 30s
+
+opa:
+  instance_id: "-"
+  graceful_shutdown_period_seconds: 2
+  local_bundles:
+    paths: []
+    skip_verification: true
+  config:
+    services:
+      ghcr:
+        url: https://ghcr.io
+        type: "oci"
+        response_header_timeout_seconds: 15
+    bundles:
+      todo:
+        service: ghcr
+        resource: '${TOPAZ_POLICY_RESOURCE}'
+        persist: false
+        config:
+          polling:
+            min_delay_seconds: 60
+            max_delay_seconds: 120
+    plugins:
+      topaz_file_decision_logger:
+        enabled: false
+        logger:
+          filename: '${TOPAZ_DECISIONS_DIR}/action-policy-authzen-topaz.json'
+          max_size: 100
+          max_age: 0
+          max_backups: 0
+          local_time: false
+          compress: false
+        policy_info:
+          policy_name: '${TOPAZ_POLICY_NAME}'
+          registry_service: ghcr
+          registry_image: aserto-policies/policy-todo
+          registry_tag: 3.0.0
+          digest: ""
+      aserto_edge:
+        enabled: false
+        addr: ""
+        apikey: ""
+        timeout: 5
+        sync_interval: 1
+        insecure: true
+        page_size: 0
+        client_cert_path: ""
+        client_key_path: ""
+        no_tls: false
+        no_proxy: false
+        headers:

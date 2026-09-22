@@ -1,0 +1,11 @@
+services:
+  openfga:
+    image: openfga/openfga:v1.21.0
+    command: run
+    environment:
+      OPENFGA_DATASTORE_ENGINE: memory
+      OPENFGA_EXPERIMENTALS: authzen
+      OPENFGA_AUTHZEN_BASE_URL: "http://127.0.0.1:${OPENFGA_PORT:-18080}"
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${OPENFGA_PORT:-18080}:8080"

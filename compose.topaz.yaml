@@ -1,0 +1,46 @@
+services:
+  topaz:
+    image: ghcr.io/aserto-dev/topaz:0.33.20
+    command: ["run", "-c", "/config/config.yaml"]
+    environment:
+      TOPAZ_AUTHORIZER_HTTP_LISTEN: "0.0.0.0:8383"
+      TOPAZ_AUTHORIZER_PUBLIC_URL: "http://127.0.0.1:${TOPAZ_PORT:-18383}"
+      TOPAZ_DIRECTORY_GRPC_LISTEN: "0.0.0.0:19292"
+      TOPAZ_POLICY_RESOURCE: "ghcr.io/aserto-policies/policy-todo:3.0.0"
+      TOPAZ_POLICY_NAME: "todo"
+      TOPAZ_DB_DIR: "/db"
+      TOPAZ_DECISIONS_DIR: "/decisions"
+    ports:
+      - "127.0.0.1:${TOPAZ_PORT:-18383}:8383"
+    volumes:
+      - ./test/fixtures/topaz/config:/config:ro
+      - topaz-db:/db
+      - topaz-decisions:/decisions
+
+  topaz-seed:
+    image: ghcr.io/aserto-dev/topaz:0.33.20
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - |
+        set -e
+        attempts=0
+        until TOPAZ_NO_CHECK=true /app/topaz directory stats --host topaz:19292 --plaintext >/dev/null 2>&1; do
+          attempts=$$((attempts + 1))
+          if [ "$$attempts" -ge 60 ]; then
+            echo "timed out waiting for Topaz directory service" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+        TOPAZ_NO_CHECK=true /app/topaz directory set manifest --host topaz:19292 --plaintext /fixtures/todo/manifest.yaml
+        TOPAZ_NO_CHECK=true /app/topaz directory data import --host topaz:19292 --plaintext --directory /fixtures/citadel
+        TOPAZ_NO_CHECK=true /app/topaz directory data import --host topaz:19292 --plaintext --directory /fixtures/todo
+    depends_on:
+      - topaz
+    volumes:
+      - ./test/fixtures/topaz:/fixtures:ro
+    restart: "no"
+
+volumes:
+  topaz-db:
+  topaz-decisions:
