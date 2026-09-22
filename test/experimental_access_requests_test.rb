@@ -247,6 +247,115 @@ class ExperimentalAccessRequestsTest < Minitest::Test
     end
   end
 
+  def test_invalid_json_error_does_not_expose_response_body_through_cause
+    require "action_policy/authzen/experimental"
+
+    with_access_request_server({status: 202, raw_body: '{"secret_token":"do-not-leak"'}) do |base_url, _requests|
+      access_requests = build_access_requests(
+        metadata: metadata_for(base_url),
+        submission_url: "#{base_url}/access/v1/requests",
+        status_url_prefix: "#{base_url}/access/v1/requests/"
+      )
+      error = assert_raises(ActionPolicy::AuthZEN::InvalidResponse) do
+        access_requests.create(offer: access_requests.offer_for(request: REQUEST, response: DENIAL), idempotency_key: "submit-123")
+      end
+
+      assert_nil error.cause
+      refute_includes error.full_message, "secret_token"
+      refute_includes error.full_message, "do-not-leak"
+    end
+  end
+
+  def test_fetch_without_status_endpoint_or_expiry_preserves_receipt_values
+    require "action_policy/authzen/experimental"
+
+    with_access_request_server(
+      {status: 202, body: pending_body},
+      {status: 200, body: approved_body(task: {"status_endpoint" => nil, "expires_at" => nil})}
+    ) do |base_url, _requests|
+      access_requests = build_access_requests(
+        metadata: metadata_for(base_url),
+        submission_url: "#{base_url}/access/v1/requests",
+        status_url_prefix: "#{base_url}/access/v1/requests/"
+      )
+      receipt = access_requests.create(offer: access_requests.offer_for(request: REQUEST, response: DENIAL), idempotency_key: "submit-123")
+      state = access_requests.fetch(receipt: receipt)
+
+      assert_equal receipt.status_endpoint, state.status_endpoint
+      assert_equal receipt.task_expires_at, state.task_expires_at
+      assert state.approved?
+    end
+  end
+
+  def test_approval_state_preserves_false_nil_and_nested_json_values
+    require "action_policy/authzen/experimental"
+
+    [false, nil, ["nested", {"ok" => true}, nil]].each_with_index do |approval_state, index|
+      with_access_request_server({status: 201, body: approved_body(approval: {"state" => approval_state})}) do |base_url, _requests|
+        access_requests = build_access_requests(
+          metadata: metadata_for(base_url),
+          submission_url: "#{base_url}/access/v1/requests",
+          status_url_prefix: "#{base_url}/access/v1/requests/"
+        )
+        state = access_requests.create(offer: access_requests.offer_for(request: REQUEST, response: DENIAL), idempotency_key: "submit-#{index}")
+        retry_request = access_requests.reevaluation_request(state: state, request: REQUEST)
+
+        assert retry_request.dig(:context, "approval").key?("state")
+        actual_state = retry_request.dig(:context, "approval", "state")
+        approval_state.nil? ? assert_nil(actual_state) : assert_equal(approval_state, actual_state)
+      end
+    end
+  end
+
+  def test_unknown_status_and_completion_mode_are_never_usable_for_reevaluation
+    require "action_policy/authzen/experimental"
+
+    [
+      pending_body(task: {"status" => "waiting"}),
+      approved_body(result: {"mode" => "token_issue", "approval" => {"id" => "apr", "approved_until" => "2026-05-01T00:42:00Z"}})
+    ].each_with_index do |body, index|
+      with_access_request_server({status: 201, body: body}) do |base_url, _requests|
+        access_requests = build_access_requests(
+          metadata: metadata_for(base_url),
+          submission_url: "#{base_url}/access/v1/requests",
+          status_url_prefix: "#{base_url}/access/v1/requests/"
+        )
+        state = access_requests.create(offer: access_requests.offer_for(request: REQUEST, response: DENIAL), idempotency_key: "submit-#{index}")
+
+        refute state.approved?
+        assert_raises(ActionPolicy::AuthZEN::UnsupportedFeature) { access_requests.reevaluation_request(state: state, request: REQUEST) }
+      end
+    end
+  end
+
+  def test_untrusted_task_status_url_is_rejected_before_credentialed_get
+    require "action_policy/authzen/experimental"
+
+    with_access_request_server(
+      {status: 202, body: pending_body(task: {"status_endpoint" => "https://user:pass@ars.example/access/v1/requests/task"})}
+    ) do |base_url, requests|
+      access_requests = build_access_requests(
+        metadata: metadata_for(base_url),
+        submission_url: "#{base_url}/access/v1/requests",
+        status_url_prefix: "#{base_url}/access/v1/requests/"
+      )
+
+      assert_raises(ActionPolicy::AuthZEN::InvalidResponse) do
+        access_requests.create(offer: access_requests.offer_for(request: REQUEST, response: DENIAL), idempotency_key: "submit-123")
+      end
+      assert_equal ["POST /access/v1/requests HTTP/1.1\r\n"], drain_requests(requests).map { |request| request.fetch(:line) }
+    end
+  end
+
+  def test_conflicting_symbol_and_string_keys_are_rejected_before_network
+    require "action_policy/authzen/experimental"
+
+    access_requests = build_access_requests
+    request = REQUEST.merge(subject: {"type" => "user", type: "user", id: "alice@example.com"})
+
+    assert_raises(ArgumentError) { access_requests.offer_for(request: request, response: DENIAL) }
+  end
+
   private
 
   def build_access_requests(metadata: {"access_request_endpoint" => "https://ars.example/access/v1/requests"},
@@ -289,20 +398,22 @@ class ExperimentalAccessRequestsTest < Minitest::Test
     }
   end
 
-  def approved_body
+  def approved_body(task: {}, result: nil, approval: {})
+    approval_body = {
+      "id" => "apr_01HX4Y8E2NE3Y2X7P0K4JE6WVH",
+      "approved_at" => "2026-04-30T20:42:00Z",
+      "approved_until" => "2026-05-01T00:42:00Z",
+      "state" => "opaque-approval-state"
+    }.merge(approval)
     {
       "task" => {
         "id" => "arq_01HX4Y3AJZ7Y56W2F9H8Q8C1V4",
-        "status" => "approved"
-      },
-      "result" => {
+        "status" => "approved",
+        "status_endpoint" => "https://ars.example/access/v1/requests/arq_01HX4Y3AJZ7Y56W2F9H8Q8C1V4"
+      }.merge(task).compact,
+      "result" => result || {
         "mode" => "reevaluate",
-        "approval" => {
-          "id" => "apr_01HX4Y8E2NE3Y2X7P0K4JE6WVH",
-          "approved_at" => "2026-04-30T20:42:00Z",
-          "approved_until" => "2026-05-01T00:42:00Z",
-          "state" => "opaque-approval-state"
-        }
+        "approval" => approval_body
       }
     }
   end
@@ -324,7 +435,7 @@ class ExperimentalAccessRequestsTest < Minitest::Test
         body = socket.read(headers.fetch("content-length", "0").to_i)
         requests << {line: line, headers: headers, body: body.empty? ? nil : JSON.parse(body)}
         response_headers = {"Content-Type" => reply.fetch(:content_type, "application/json")}.merge(reply.fetch(:headers, {}))
-        payload = JSON.generate(rewrite_urls(reply.fetch(:body), base_url))
+        payload = reply.key?(:raw_body) ? reply.fetch(:raw_body) : JSON.generate(rewrite_urls(reply.fetch(:body), base_url))
         response_headers["Content-Length"] = payload.bytesize.to_s
         response_headers["Connection"] = "close"
         socket.write("HTTP/1.1 #{reply.fetch(:status)} Test\r\n")
