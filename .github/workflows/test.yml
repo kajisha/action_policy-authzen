@@ -1,0 +1,51 @@
+name: test
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.3", "3.4", "4.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - run: bundle exec rake test
+      - run: docker compose up -d
+      - run: |
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/healthz; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+          OPENFGA_URL=http://127.0.0.1:18080 bundle exec ruby -Itest test/integration/openfga_test.rb
+      - if: always()
+        run: docker compose down
+  additional-pdps:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.3", "3.4", "4.0"]
+        pdp: [opa, topaz]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - run: bash script/test-${{ matrix.pdp }}
+      - if: matrix.pdp == 'opa'
+        run: bash script/test-opa official
