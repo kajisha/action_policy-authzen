@@ -10,14 +10,19 @@ See [conformance and limitations](docs/conformance.md) and
 
 ## Installation
 
-Requires Ruby 3.3 or later. This gem has not yet been published to RubyGems.
-Until release, use a local checkout:
+Requires Ruby 3.3 or later. Add the gem to your Gemfile:
 
 ```ruby
-gem "action_policy-authzen", path: "/path/to/action_policy-authzen"
+gem "action_policy-authzen", "~> 0.1.0"
 ```
 
-For development:
+Then install it:
+
+```sh
+bundle install
+```
+
+For development, clone this repository and run:
 
 ```sh
 bundle install
