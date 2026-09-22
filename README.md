@@ -179,6 +179,23 @@ end
 
 Consider result size before collecting IDs in memory or constructing database scopes.
 
+## Experimental access requests
+
+The opt-in access-request API supports a single-item subset of the AuthZEN Access
+Request and Approval Profile draft: interpret a requestable denial, explicitly
+submit a request, retrieve its task status, and build a fresh PDP re-evaluation.
+
+```ruby
+require "action_policy/authzen"
+require "action_policy/authzen/experimental"
+```
+
+Approval does not grant access. Keep the workflow outside Action Policy rules and
+authorize the operation through a fresh PDP decision. Experimental APIs can change
+between releases; forms, bundles, callbacks, and durable handle restoration are
+not supported. See [the access-request guide](docs/experimental-access-requests.md)
+for configuration, service trust, and examples.
+
 ## Integration tests
 
 Use isolated test services, never production PDPs. OpenFGA 1.21.0 runs with

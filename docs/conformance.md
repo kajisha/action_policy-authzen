@@ -32,6 +32,28 @@ preserved but do not influence decisions.
 - **Search:** not an atomic permission snapshot. Deduplication and reauthorization before an operation belong to the application.
 - **Decision context:** preserved, including reasons, errors, and obligations. Application-specific obligations are not executed automatically.
 
+## Experimental access requests
+
+After loading `require "action_policy/authzen"`, explicitly load
+`require "action_policy/authzen/experimental"` to enable the separate
+requester API for the [Access Request and Approval Profile draft](https://github.com/openid/authzen/blob/6ed00bad5daa8f6eef6f2aef1f124442beeb8382/profiles/authzen-access-request-approval/authzen-access-request-approval-profile-1_0.md),
+pinned to commit `6ed00bad5daa8f6eef6f2aef1f124442beeb8382`. The ordinary client and
+Policy helpers do not automatically invoke it.
+
+The initial subset covers single-item requestable denials, explicit submission,
+task retrieval, and construction of an approval-bearing re-evaluation request.
+Approval-service credentials and endpoint trust are configured independently.
+The receiving approval service and PDP verify opaque denial/approval bindings;
+the client does not perform cryptographic verification or grant access from a
+task result.
+
+Forms/catalog augmentation, bulk tasks, callbacks, cancellation, automatic
+follow-up, durable handle restoration, and full profile conformance are excluded.
+COAZ and shadow evaluation remain design proposals. See the
+[experimental guide](experimental-access-requests.md) for precise usage boundaries.
+Client tests use local protocol fixtures; they do not establish real approval
+service interoperability or certification.
+
 ## PDP targets
 
 - [OpenFGA 1.21.0](https://github.com/openfga/openfga/releases/tag/v1.21.0): tested with `authzen` enabled. Native APIs provision stores/models/tuples; AuthZEN exercises evaluation, batch, all searches, and discovery. Its [documented lack of pagination](https://openfga.dev/docs/interacting/authzen) is not used as pagination evidence.
